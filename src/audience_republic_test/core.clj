@@ -1,4 +1,5 @@
 (ns audience-republic-test.core
+  (:require [clojure.set :as set])
   (:gen-class))
 
 
@@ -20,7 +21,6 @@
   [size sparseness]
   (let [minimum-edges (- size 1)
         maximum-edges (/ (* (- size 1) size) 2)]
-    (println "minimum:" minimum-edges "maximum:" maximum-edges)
     (and (<= minimum-edges sparseness) (>= maximum-edges sparseness))))
 
 
@@ -75,20 +75,13 @@
     nil))
 
 
-(defn dijkstra-node
-  [graph
-   source
-   destination
-   unvisited-set
-   visited-set
-   node-id
-   neighbours
-   distances]
+(defn- dijkstra-node
+  [graph source destination unvisited-set visited-set node-id neighbours distances]
   (let [node-distance                 (get-in distances [node-id :distance])
         node-path                     (get-in distances [node-id :path])
         new-path                      (conj node-path node-id)
         ; 2. Check ALL neighbours and calculate their distances via this node
-        unvisited-neighbours          (remove #(contains? visited-set (first %)) neighbours)
+        unvisited-neighbours          (remove (fn [neighbour] (contains? (set visited-set) (first neighbour))) neighbours)
         neighbour-tentative-distances (reduce (fn [coll v] (assoc coll (first v) (+ node-distance (second v)))) {} unvisited-neighbours)
         ; 3. For each neighbour, update the distance and path if it is shorter than the current path
         updated-distances             (reduce
@@ -105,19 +98,14 @@
         ; 4. Then set the current node to visited, and remove it from the unvisited set
         updated-visited-set           (conj visited-set node-id)
         updated-unvisited-set         (remove #{node-id} unvisited-set)]
-    (println node-id)
-    (println unvisited-neighbours)
-    (println updated-distances)
-    (println updated-unvisited-set updated-visited-set destination)
     (if (or (contains? updated-visited-set destination) (empty? updated-unvisited-set))
       ; 5. IF the destination node is visited, OR if the smallest distance among the nodes in the unvisited set is infinity, then stop.
       updated-distances
       ; 6. ELSE select the unvisited node with the smallest tentative distance
       (let [distance-map (reduce (fn [coll v] (assoc coll v (get-in updated-distances [v :distance]))) {} updated-unvisited-set)
-            smallest-key (reduce (fn [init v] (println init v) (if (< (second v) (second init)) v init))
+            smallest-key (reduce (fn [init v] (if (< (second v) (second init)) v init))
                                  [:A (Integer/MAX_VALUE)] distance-map)
             new-key      (first smallest-key)]
-        (println distance-map smallest-key new-key)
         (dijkstra-node graph source destination updated-unvisited-set updated-visited-set new-key (graph new-key) updated-distances)))))
 
 
@@ -132,63 +120,56 @@
         distances            (update-in raw-distances [node-id] assoc :distance 0 :path [])]
     ; set all distances to infinity, except for the source which is zero
     (let [dijkstra-map     (dijkstra-node graph source destination unvisited-set visited-set node-id unvisited-neighbours distances)]
+      (println graph)
       (get-in dijkstra-map [destination :path]))))
 
 
-(defn recursive-sequence [graph explored-nodes frontier current-weight current-history]
-  (if (empty? frontier)
-    nil
-    (let [node                                          (peek frontier)
-          node-id                                       (first node)
-          node-weight                                   (second node)
-          node-total-weight                             (+ current-weight node-weight)
-          updated-explored-nodes                        (conj explored-nodes node-id)
-          node-neighbours                               (graph node-id)
-          node-neighbours-without-explored              (reduce
-                                                         (fn [coll val]
-                                                           (if (contains? updated-explored-nodes (first val)) coll (conj coll val)))
-                                                         {} node-neighbours)
-          updated-frontier-nodes                        (into (pop frontier) node-neighbours-without-explored)
-          updated-history                               (conj current-history node-id)]
-      (print "explored nodes:" explored-nodes)
-      (print "\tfrontier nodes:" (seq frontier))
-      (print "\tcurrent-weight:" current-weight)
-      (print "\tcurrent-history:" current-history "\n")
-      (print "node-id:" node-id)
-      (print "\tnode-weight:" node-weight)
-      (print "\tnode-total-weight:" node-total-weight)
-      (print "\tnode-neighbours:" node-neighbours "\n")
-      (print "Updated explored nodes:" updated-explored-nodes "\n")
-      (print "Updated frontier nodes:" (seq updated-frontier-nodes) "\n")
-      (cons [node-id node-total-weight current-history]
-            (recursive-sequence
-             graph
-             updated-explored-nodes
-             updated-frontier-nodes
-             node-total-weight
-             updated-history)))))
+(defn- eccentricity-node
+  [graph source unvisited-set visited-set node-id neighbours distances]
+  (let [node-distance                 (get-in distances [node-id :distance])
+        node-path                     (get-in distances [node-id :path])
+        new-path                      (conj node-path node-id)
+        ; 2. Check ALL neighbours and calculate their distances via this node
+        unvisited-neighbours          (remove (fn [neighbour] (contains? (set visited-set) (first neighbour))) neighbours)
+        neighbour-tentative-distances (reduce (fn [coll v] (assoc coll (first v) (+ node-distance (second v)))) {} unvisited-neighbours)
+        ; 3. For each neighbour, update the distance and path if it is shorter than the current path
+        updated-distances             (reduce
+                                       (fn [coll v]
+                                         (let [current-key           (first v)
+                                               current-record-holder (get-in distances [current-key :distance])
+                                               current-contender     (neighbour-tentative-distances current-key)]
+                                           (if (and (not (nil? current-contender)) (> current-contender current-record-holder))
+                                             ; update the distance
+                                             (assoc coll current-key {:distance current-contender :path new-path})
+                                             ; otherwise leave as is
+                                             (assoc coll current-key (distances current-key)))))
+                                       {} distances)
+        ; 4. Then set the current node to visited, and remove it from the unvisited set
+        updated-visited-set           (conj visited-set node-id)
+        updated-unvisited-set         (remove #{node-id} unvisited-set)]
+    (if (empty? updated-unvisited-set)
+      ; 5. IF the destination node is visited, OR if the smallest distance among the nodes in the unvisited set is infinity, then stop.
+      updated-distances
+      ; 6. ELSE select the unvisited node with the smallest tentative distance
+      (let [distance-map (reduce (fn [coll v] (assoc coll v (get-in updated-distances [v :distance]))) {} updated-unvisited-set)
+            largest-key (reduce (fn [init v] (if (> (second v) (second init)) v init)) [:A 0] distance-map)
+            new-key      (first largest-key)]
+        (eccentricity-node graph source updated-unvisited-set updated-visited-set new-key (graph new-key) updated-distances)))))
 
 
-(defn seq-graph [initial-collection graph start-node start-weight]
-  (recursive-sequence graph [] (conj initial-collection [start-node start-weight]) 0 []))
+(defn eccentricity
+  [graph source]
+  (let [unvisited-set (keys graph)
+        visited-set []
+        node-id source
+        unvisited-neighbours (graph node-id)
+        distances (reduce (fn [coll key] (assoc coll key {:distance 0 :path []})) {} unvisited-set)]
+    (let [eccentricity-map (eccentricity-node graph source unvisited-set visited-set node-id unvisited-neighbours distances)]
+      (println graph)
+      eccentricity-map)))
 
-(defn seq-graph-let-weightlift [initial-collection graph start-node]
-  ((fn rec-seq [explored frontier]
-     (lazy-seq
-       (if (empty? frontier)
-         nil
-         (let [next-node          (peek frontier)
-               neighbours         (graph next-node)
-               updated-explored   (into explored neighbours)
-               updated-neighbours (remove explored neighbours)
-               updated-frontier   (into (pop frontier) updated-neighbours)]
-           (cons next-node
-                 (rec-seq
-                  updated-explored
-                  updated-frontier))))))
-    #{start-node} (conj initial-collection start-node)))
 
-(defn seq-graph-original [initial-collection graph start-node]
+(defn seq-graph [initial-collection graph start-node]
   ((fn rec-seq [explored frontier]
      (lazy-seq
        (if (empty? frontier)
@@ -201,18 +182,11 @@
                   (into (pop frontier) (remove explored neighbors))))))))
     #{start-node} (conj initial-collection start-node)))
 
+
 (def seq-graph-dfs (partial seq-graph []))
 (def seq-graph-bfs (partial seq-graph (clojure.lang.PersistentQueue/EMPTY)))
 
 
 (defn -main
   "I don't do a whole lot ... yet."
-  [& args]
-  (println "Non-weighted:")
-  ; => (:1 :2 :3 :4)
-  ;  (println "BFS{{" (seq-graph-bfs _graph :1) "}}")
-  ; => (:1 :3 :4 :2)
-  ;  (println "DFS{{" (seq-graph-dfs _graph :1) "}}")
-  (println "Weighted:")
-  (println (seq-graph-bfs _weighted-graph :1 0))
-  (println (seq-graph-dfs _weighted-graph :1 0)))
+  [& args])
