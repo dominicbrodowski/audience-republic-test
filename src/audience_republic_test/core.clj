@@ -55,8 +55,8 @@
          current-graph   (construct-minimal-graph graph)]
     (if (zero? remaining-edges)
       current-graph
-      (let [random-source          (keyword (str (inc (rand-int (dec num-vertices)))))
-            new-destination        (keyword (str (inc (rand-int (dec num-vertices)))))
+      (let [random-source          (keyword (str (inc (rand-int num-vertices))))
+            new-destination        (keyword (str (inc (rand-int num-vertices))))
             new-destination-weight (inc (rand-int 10))]
         (recur ; pick a random key, then add a random destination with a random length
           (dec remaining-edges)
@@ -99,12 +99,11 @@
         updated-visited-set           (conj visited-set node-id)
         updated-unvisited-set         (remove #{node-id} unvisited-set)]
     (if (or (contains? updated-visited-set destination) (empty? updated-unvisited-set))
-      ; 5. IF the destination node is visited, OR if the smallest distance among the nodes in the unvisited set is infinity, then stop.
+      ; 5. IF the destination node is visited, then stop.
       updated-distances
       ; 6. ELSE select the unvisited node with the smallest tentative distance
       (let [distance-map (reduce (fn [coll v] (assoc coll v (get-in updated-distances [v :distance]))) {} updated-unvisited-set)
-            smallest-key (reduce (fn [init v] (if (< (second v) (second init)) v init))
-                                 [:A (Integer/MAX_VALUE)] distance-map)
+            smallest-key (reduce (fn [init v] (if (< (second v) (second init)) v init)) distance-map)
             new-key      (first smallest-key)]
         (dijkstra-node graph source destination updated-unvisited-set updated-visited-set new-key (graph new-key) updated-distances)))))
 
@@ -132,7 +131,7 @@
         ; 2. Check ALL neighbours and calculate their distances via this node
         unvisited-neighbours          (remove (fn [neighbour] (contains? (set visited-set) (first neighbour))) neighbours)
         neighbour-tentative-distances (reduce (fn [coll v] (assoc coll (first v) (+ node-distance (second v)))) {} unvisited-neighbours)
-        ; 3. For each neighbour, update the distance and path if it is shorter than the current path
+        ; 3. For each neighbour, update the distance and path if it is larger than the current path
         updated-distances             (reduce
                                        (fn [coll v]
                                          (let [current-key           (first v)
@@ -147,12 +146,12 @@
         ; 4. Then set the current node to visited, and remove it from the unvisited set
         updated-visited-set           (conj visited-set node-id)
         updated-unvisited-set         (remove #{node-id} unvisited-set)]
-    (if (empty? updated-unvisited-set)
-      ; 5. IF the destination node is visited, OR if the smallest distance among the nodes in the unvisited set is infinity, then stop.
+    ; 5. IF the destination node is visited, then stop.
+    (if (or (empty? updated-unvisited-set) (empty? (set/union updated-unvisited-set (first unvisited-neighbours))))
       updated-distances
       ; 6. ELSE select the unvisited node with the smallest tentative distance
       (let [distance-map (reduce (fn [coll v] (assoc coll v (get-in updated-distances [v :distance]))) {} updated-unvisited-set)
-            largest-key (reduce (fn [init v] (if (> (second v) (second init)) v init)) [:A 0] distance-map)
+            largest-key (reduce (fn [init v] (if (> (second v) (second init)) v init)) distance-map)
             new-key      (first largest-key)]
         (eccentricity-node graph source updated-unvisited-set updated-visited-set new-key (graph new-key) updated-distances)))))
 
@@ -164,9 +163,19 @@
         node-id source
         unvisited-neighbours (graph node-id)
         distances (reduce (fn [coll key] (assoc coll key {:distance 0 :path []})) {} unvisited-set)]
+    (println graph)
     (let [eccentricity-map (eccentricity-node graph source unvisited-set visited-set node-id unvisited-neighbours distances)]
-      (println graph)
       eccentricity-map)))
+
+
+(defn radius
+  [graph]
+  (min (map #(eccentricity graph %) (keys graph))))
+
+
+(defn diameter
+  [graph]
+  (max (map #(eccentricity graph %) (keys graph))))
 
 
 (defn seq-graph [initial-collection graph start-node]
