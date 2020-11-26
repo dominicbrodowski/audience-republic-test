@@ -18,6 +18,7 @@
 
 
 (defn- valid-sparseness
+  "Boolean test to check that the sparseness setting for generating a graph is correct. Expecting a value between N-1 and N(N-1)/2"
   [size sparseness]
   (let [minimum-edges (- size 1)
         maximum-edges (/ (* (- size 1) size) 2)]
@@ -25,6 +26,7 @@
 
 
 (defn- construct-minimal-graph
+  "Constructs the bare minimum of what is expected of a connected graph. Will connect each node to the other sequentially."
   [graph]
   (loop [current-index 1
          final-index   (count graph)
@@ -76,6 +78,7 @@
 
 
 (defn- dijkstra-node
+  "Recursive function that calculates shortest path via Dijkstra's algorithm."
   [graph source destination unvisited-set visited-set node-id neighbours distances]
   (let [node-distance                 (get-in distances [node-id :distance])
         node-path                     (get-in distances [node-id :path])
@@ -109,6 +112,7 @@
 
 
 (defn dijkstras-algorithm
+  "Shortest path from source to destination in the graph provided. Returns the nodes it passes through."
   [graph source destination]
   (let [unvisited-set        (keys graph)
         visited-set          []
@@ -119,11 +123,11 @@
         distances            (update-in raw-distances [node-id] assoc :distance 0 :path [])]
     ; set all distances to infinity, except for the source which is zero
     (let [dijkstra-map     (dijkstra-node graph source destination unvisited-set visited-set node-id unvisited-neighbours distances)]
-      (println graph)
       (get-in dijkstra-map [destination :path]))))
 
 
 (defn- eccentricity-node
+  "Reverse of Dijkstra's algorithm."
   [graph source unvisited-set visited-set node-id neighbours distances]
   (let [node-distance                 (get-in distances [node-id :distance])
         node-path                     (get-in distances [node-id :path])
@@ -157,6 +161,7 @@
 
 
 (defn eccentricity
+  "Longest path from source to any other vertex in the graph provided."
   [graph source]
   (let [unvisited-set (keys graph)
         visited-set []
@@ -169,11 +174,13 @@
 
 
 (defn radius
+  "The smallest eccentricity found in the graph provided."
   [graph]
   (apply min (map #(eccentricity graph %) (keys graph))))
 
 
 (defn diameter
+  "The largest eccentricity found in the graph provided."
   [graph]
   (apply max (map #(eccentricity graph %) (keys graph))))
 
