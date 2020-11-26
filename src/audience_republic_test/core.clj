@@ -16,7 +16,7 @@
    :4 {}})
 
 
-(defn valid-sparseness
+(defn- valid-sparseness
   [size sparseness]
   (let [minimum-edges (- size 1)
         maximum-edges (/ (* (- size 1) size) 2)]
@@ -24,12 +24,12 @@
     (and (<= minimum-edges sparseness) (>= maximum-edges sparseness))))
 
 
-(defn construct-minimal-graph
+(defn- construct-minimal-graph
   [graph]
   (loop [current-index 1
          final-index   (count graph)
          current-graph graph]
-    (let [next-index  (+ current-index 1)
+    (let [next-index  (inc current-index)
           current-key (keyword (str current-index))
           next-key    (keyword (str next-index))]
       (if (= current-index final-index)
@@ -38,7 +38,7 @@
           (update-in current-graph [current-key] assoc next-key (inc (rand-int 10))))))))
 
 
-(defn generate-keys
+(defn- generate-keys
   [size]
   (let [integer-range (range 1 (+ 1 size))
         string-range  (map str integer-range)
@@ -47,7 +47,7 @@
     hashmap-range))
 
 
-(defn generate-edges
+(defn- generate-edges
   "Will attempt to generate the num-edges amount of edges. Will definitely achieve the minimum,
   but may not reach the desired number at higher levels because it does not check for existing mappings."
   [graph num-vertices num-edges]
@@ -55,12 +55,12 @@
          current-graph   (construct-minimal-graph graph)]
     (if (zero? remaining-edges)
       current-graph
-      (let [random-source          (keyword (str (inc (rand-int 10))))
-            new-destination        (keyword (str (inc (rand-int 10))))
+      (let [random-source          (keyword (str (inc (rand-int (dec num-vertices)))))
+            new-destination        (keyword (str (inc (rand-int (dec num-vertices)))))
             new-destination-weight (inc (rand-int 10))]
         (recur ; pick a random key, then add a random destination with a random length
           (dec remaining-edges)
-          (update-in current-graph [(keyword (str (inc (rand-int 10))))] assoc new-destination new-destination-weight))))))
+          (update-in current-graph [random-source] assoc new-destination new-destination-weight))))))
 
 
 (defn generate-graph
@@ -73,6 +73,67 @@
           graph-with-keys  (generate-keys N)]
       (generate-edges graph-with-keys N S))
     nil))
+
+
+(defn dijkstra-node
+  [graph
+   source
+   destination
+   unvisited-set
+   visited-set
+   node-id
+   neighbours
+   distances]
+  (let [node-distance                 (get-in distances [node-id :distance])
+        node-path                     (get-in distances [node-id :path])
+        new-path                      (conj node-path node-id)
+        ; 2. Check ALL neighbours and calculate their distances via this node
+        unvisited-neighbours          (remove #(contains? visited-set (first %)) neighbours)
+        neighbour-tentative-distances (reduce (fn [coll v] (assoc coll (first v) (+ node-distance (second v)))) {} unvisited-neighbours)
+        ; 3. For each neighbour, update the distance and path if it is shorter than the current path
+        updated-distances             (reduce
+                                       (fn [coll v]
+                                         (let [current-key           (first v)
+                                               current-record-holder (get-in distances [current-key :distance])
+                                               current-contender     (neighbour-tentative-distances current-key)]
+                                           (if (and (not (nil? current-contender)) (< current-contender current-record-holder))
+                                             ; update the distance
+                                             (assoc coll current-key {:distance current-contender :path new-path})
+                                             ; otherwise leave as is
+                                             (assoc coll current-key (distances current-key)))))
+                                       {} distances)
+        ; 4. Then set the current node to visited, and remove it from the unvisited set
+        updated-visited-set           (conj visited-set node-id)
+        updated-unvisited-set         (remove #{node-id} unvisited-set)]
+    (println node-id)
+    (println unvisited-neighbours)
+    (println updated-distances)
+    (println updated-unvisited-set updated-visited-set destination)
+    (if (or (contains? updated-visited-set destination) (empty? updated-unvisited-set))
+      ; 5. IF the destination node is visited, OR if the smallest distance among the nodes in the unvisited set is infinity, then stop.
+      updated-distances
+      ; 6. ELSE select the unvisited node with the smallest tentative distance
+      (let [distance-map (reduce (fn [coll v] (assoc coll v (get-in updated-distances [v :distance]))) {} updated-unvisited-set)
+            smallest-key (reduce (fn [init v] (println init v) (if (< (second v) (second init)) v init))
+                                 [:A (Integer/MAX_VALUE)] distance-map)
+            new-key      (first smallest-key)]
+        (println distance-map smallest-key new-key)
+        (dijkstra-node graph source destination updated-unvisited-set updated-visited-set new-key (graph new-key) updated-distances)))))
+
+
+(defn dijkstras-algorithm
+  [graph source destination]
+  (let [unvisited-set        (keys graph)
+        visited-set          []
+        node-id              source
+        unvisited-neighbours (graph node-id)
+        raw-distances        (reduce
+                              (fn [coll key] (assoc coll key {:distance (Integer/MAX_VALUE) :path []})) {} unvisited-set)
+        distances            (update-in raw-distances [node-id] assoc :distance 0 :path [])]
+    ; set all distances to infinity, except for the source which is zero
+    (let [dijkstra-map     (dijkstra-node graph source destination unvisited-set visited-set node-id unvisited-neighbours distances)]
+      (get-in dijkstra-map [destination :path]))))
+
 
 (defn recursive-sequence [graph explored-nodes frontier current-weight current-history]
   (if (empty? frontier)
