@@ -163,19 +163,19 @@
         node-id source
         unvisited-neighbours (graph node-id)
         distances (reduce (fn [coll key] (assoc coll key {:distance 0 :path []})) {} unvisited-set)]
-    (println graph)
-    (let [eccentricity-map (eccentricity-node graph source unvisited-set visited-set node-id unvisited-neighbours distances)]
-      eccentricity-map)))
+    (let [eccentricity-map (eccentricity-node graph source unvisited-set visited-set node-id unvisited-neighbours distances)
+          distances (map #(:distance (second %)) eccentricity-map)]
+      (apply max distances))))
 
 
 (defn radius
   [graph]
-  (min (map #(eccentricity graph %) (keys graph))))
+  (apply min (map #(eccentricity graph %) (keys graph))))
 
 
 (defn diameter
   [graph]
-  (max (map #(eccentricity graph %) (keys graph))))
+  (apply max (map #(eccentricity graph %) (keys graph))))
 
 
 (defn seq-graph [initial-collection graph start-node]
