@@ -1,5 +1,6 @@
 (ns audience-republic-test.core
-  (:require [clojure.set :as set])
+  (:require [clojure.set :as set]
+            [clojure.test :refer :all])
   (:gen-class))
 
 
@@ -25,19 +26,23 @@
     (and (<= minimum-edges sparseness) (>= maximum-edges sparseness))))
 
 
+(defn- int-to-key
+  [_int]
+  (keyword (str _int)))
+
+
+(defn- key-to-int
+  [_key]
+  (Integer/parseInt (name _key)))
+
+
 (defn- construct-minimal-graph
   "Constructs the bare minimum of what is expected of a connected graph. Will connect each node to the other sequentially."
-  [graph]
-  (loop [current-index 1
-         final-index   (count graph)
-         current-graph graph]
-    (let [next-index  (inc current-index)
-          current-key (keyword (str current-index))
-          next-key    (keyword (str next-index))]
-      (if (= current-index final-index)
-        current-graph
-        (recur next-index final-index
-          (update-in current-graph [current-key] assoc next-key (inc (rand-int 10))))))))
+  [num-vertices]
+  (let [integer-range (range 1 num-vertices)
+        minimal-graph (reduce
+                       (fn [coll key] (assoc coll (int-to-key key) {(int-to-key (inc key)) (inc (rand-int 10))})) {} integer-range)]
+    minimal-graph))
 
 
 (defn- generate-keys
@@ -49,20 +54,29 @@
     hashmap-range))
 
 
-(defn- generate-edges
-  "Will attempt to generate the num-edges amount of edges. Will definitely achieve the minimum,
-  but may not reach the desired number at higher levels because it does not check for existing mappings."
+(defn- generate-all-edge-possibilities
+  [keys]
+  (let [integer-range (range 1 (inc (count keys)))
+        string-range  (map str integer-range)
+        keyword-range (map keyword string-range)]
+    (remove #(= (first %) (second %)) (apply concat (reduce (fn [coll key] (conj coll (map list (repeat key) keyword-range))) [] keys)))))
+
+
+(defn generate-edges
+  "Will attempt to generate the num-edges amount of edges, including the minimal set."
   [graph num-vertices num-edges]
-  (loop [remaining-edges (inc (- num-edges num-vertices))
-         current-graph   (construct-minimal-graph graph)]
-    (if (zero? remaining-edges)
-      current-graph
-      (let [random-source          (keyword (str (inc (rand-int num-vertices))))
-            new-destination        (keyword (str (inc (rand-int num-vertices))))
-            new-destination-weight (inc (rand-int 10))]
-        (recur ; pick a random key, then add a random destination with a random length
-          (dec remaining-edges)
-          (update-in current-graph [random-source] assoc new-destination new-destination-weight))))))
+  (let [current-graph   (construct-minimal-graph num-vertices)
+        remaining-edges (inc (- num-edges num-vertices))
+        edge-possibilities (generate-all-edge-possibilities (keys graph))
+        edge-possibilities-without-minimal-graph (remove (fn [x] (let [key-int (key-to-int (first x))
+                                                                       val-int (key-to-int (second x))]
+                                                                   (= key-int (dec val-int)))) edge-possibilities)
+        shuffled-edges (shuffle edge-possibilities-without-minimal-graph)
+        num-intended-edges (take remaining-edges shuffled-edges)]
+    (reduce (fn [coll x]
+              (let [_key (first x)
+                    _val (second x)]
+                (update-in coll [_key] assoc _val (inc (rand-int 10))))) current-graph num-intended-edges)))
 
 
 (defn generate-graph
@@ -75,6 +89,15 @@
           graph-with-keys  (generate-keys N)]
       (generate-edges graph-with-keys N S))
     nil))
+
+
+(deftest generate-graph-test
+  (let [graph (generate-graph 5 4)]
+    (is (= 4 (count (keys graph))))
+    (is (= 4 (reduce + (map count (vals graph))))))
+  (let [graph (generate-graph 5 10)]
+    (is (<= 4 (count (keys graph))))
+    (is (= 10 (reduce + (map count (vals graph)))))))
 
 
 (defn- dijkstra-node
