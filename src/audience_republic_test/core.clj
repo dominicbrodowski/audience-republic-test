@@ -71,7 +71,9 @@
   [graph num-vertices num-edges]
   (let [current-graph                            (construct-minimal-graph num-vertices)
         remaining-edges                          (inc (- num-edges num-vertices))
+        ; Generate every edge permutation, minus an edge from a source to itself.
         edge-possibilities                       (generate-all-edge-possibilities (keys graph))
+        ; Remove the minimal graph entries that already exist. There's probably a smarter way to do this.
         edge-possibilities-without-minimal-graph (remove
                                                    (fn [x]
                                                      (let [key-int (key-to-int (first x))
@@ -80,6 +82,7 @@
                                                    edge-possibilities)
         shuffled-edges                           (shuffle edge-possibilities-without-minimal-graph)
         num-intended-edges                       (take remaining-edges shuffled-edges)]
+    ; Before returning, format into the appropriate map format with random weights added
     (reduce
       (fn [coll x]
         (let [_key (first x)
