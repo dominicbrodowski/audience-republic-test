@@ -103,15 +103,6 @@
     nil))
 
 
-(deftest generate-graph-test
-  (let [graph (generate-graph 5 4)]
-    (is (= 4 (count (keys graph))))
-    (is (= 4 (reduce + (map count (vals graph))))))
-  (let [graph (generate-graph 5 10)]
-    (is (<= 4 (count (keys graph))))
-    (is (= 10 (reduce + (map count (vals graph)))))))
-
-
 (defn- dijkstra-node
   "Recursive function that calculates shortest path via Dijkstra's algorithm."
   [graph
@@ -168,13 +159,6 @@
       (get-in dijkstra-map [destination]))))
 
 
-(deftest dijkstra-test
-  (let [graph {:1 {:2 1 :3 10 :4 10 :5 10}, :2 {:3 3, :1 1}, :3 {:4 1, :1 1}, :4 {:5 1, :3 1, :2 1}, :5 {:1 3, :2 8}}
-        dijkstra (dijkstras-algorithm graph :1 :5)]
-    (is (= 6 (:distance dijkstra)))
-    (is (= [:1 :2 :3 :4] (:path dijkstra)))))
-
-
 (defn eccentricity
   "Longest path from source to any other vertex in the graph provided."
   [graph source]
@@ -182,12 +166,6 @@
         eccentricity-map    (map #(dijkstras-algorithm graph source %) set-of-destinations)
         distances           (map #(:distance %) eccentricity-map)]
     (apply max distances)))
-
-
-(deftest eccentricity-test
-  (let [graph {:1 {:2 1 :4 1} :2 {:3 1} :3 {:4 1} :4 {:5 1} :5 {:1 1}}
-        eccentricity (eccentricity graph :1)]
-    (is (= 2 eccentricity))))
 
 
 (defn radius
@@ -200,6 +178,29 @@
   "The largest eccentricity found in the graph provided."
   [graph]
   (apply max (map #(eccentricity graph %) (keys graph))))
+
+
+; --------- TESTS ---------- ;
+(deftest generate-graph-test
+  (let [graph (generate-graph 5 4)]
+    (is (= 5 (count (keys graph))))
+    (is (= 4 (reduce + (map count (vals graph))))))
+  (let [graph (generate-graph 5 10)]
+    (is (<= 4 (count (keys graph))))
+    (is (= 10 (reduce + (map count (vals graph)))))))
+
+
+(deftest dijkstra-test
+  (let [graph {:1 {:2 1 :3 10 :4 10 :5 10}, :2 {:3 3, :1 1}, :3 {:4 1, :1 1}, :4 {:5 1, :3 1, :2 1}, :5 {:1 3, :2 8}}
+        dijkstra (dijkstras-algorithm graph :1 :5)]
+    (is (= 6 (:distance dijkstra)))
+    (is (= [:1 :2 :3 :4] (:path dijkstra)))))
+
+
+(deftest eccentricity-test
+  (let [graph {:1 {:2 1 :4 1} :2 {:3 1} :3 {:4 1} :4 {:5 1} :5 {:1 1}}
+        eccentricity (eccentricity graph :1)]
+    (is (= 2 eccentricity))))
 
 
 (deftest radius-and-diameter-test
