@@ -42,7 +42,7 @@
   (let [integer-range (range 1 num-vertices)
         minimal-graph (reduce
                        (fn [coll key] (assoc coll (int-to-key key) {(int-to-key (inc key)) (inc (rand-int 10))})) {} integer-range)]
-    minimal-graph))
+    (assoc minimal-graph (int-to-key num-vertices) {})))
 
 
 (defn- generate-keys
